@@ -34,9 +34,10 @@ my @module_ranges = parse_module_ranges($text);
 die "ERROR: top module '$top' not found in $infile\n" unless exists $module_body{$top};
 
 # 3) 建依赖图（parent -> child modules）
+my %missing_modules;
 my %graph;
 for my $m (keys %module_body) {
-  $graph{$m} = [ extract_children($module_body{$m}, \%module_body) ];
+  $graph{$m} = [ extract_children($module_body{$m}, \%module_body, \%missing_modules) ];
 }
 
 # 4) 从 top 做闭包
@@ -61,6 +62,12 @@ my @ordered = modules_in_source_order(\@module_ranges, \%seen);
 my @out = build_output_with_scoped_directives($text, \@module_ranges, \%seen, $infile, $top);
 spit($outfile, join("\n", @out));
 
+# 输出缺失的外部模块
+if (keys %missing_modules) {
+  my @missing_list = sort keys %missing_modules;
+  spit('missing_modules.txt', join("\n", @missing_list) . "\n");
+}
+
 # 7) 复制被抽取模块里用到的 include 文件（递归）
 my $out_incdir = out_incdir_from_outfile($outfile);
 my %include_state = (seen => {}, copied => {});
@@ -74,6 +81,10 @@ print "  modules    : " . scalar(@needed) . " (" . join(', ', @ordered) . ")\n";
 print "  output sv  : $outfile\n";
 print "  hierarchy  : $hierfile\n";
 print "  include dir: $out_incdir (copied " . scalar(keys %{ $include_state{copied} }) . ")\n";
+if (keys %missing_modules) {
+  my @missing_list = sort keys %missing_modules;
+  print "  missing mod: " . scalar(@missing_list) . " (" . join(', ', @missing_list) . ")\n";
+}
 
 sub usage {
   return <<'USAGE';
@@ -200,7 +211,7 @@ sub build_output_with_scoped_directives {
 }
 
 sub extract_children {
-  my ($body, $modref) = @_;
+  my ($body, $modref, $missing_ref) = @_;
   my @c;
 
   my %kw = map { $_ => 1 } qw(
@@ -219,9 +230,14 @@ sub extract_children {
     if ($line =~ /^\s*([A-Za-z_]\w*)\s*(?:#\s*\()?/) {
       my $cand = $1;
       next if $kw{$cand};
-      next unless exists $modref->{$cand};
       next unless $line =~ /\(/;
-      push @c, $cand;
+      
+      if (exists $modref->{$cand}) {
+        push @c, $cand;
+      } elsif ($missing_ref) {
+        # 记录缺失的模块（只记一次）
+        $missing_ref->{$cand} = 1;
+      }
     }
   }
   return uniq(@c);

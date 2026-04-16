@@ -8,7 +8,8 @@
 - 从指定顶层模块做闭包遍历，提取所有依赖模块
 - 保持原文件中 `timescale`、`include`、`define` 等编译指令的作用域
 - 输出层级关系到 `hierarchy.txt`
-- 自动复制被抽取模块用到的 `include 文件到输出目录
+- 自动复制被抽取模块用到的 `include` 文件到输出目录
+- **[NEW]** 自动检测并记录缺失的外部模块依赖到 `missing_modules.txt`
 
 ## 依赖
 
@@ -52,7 +53,20 @@ perl svslice_simple.pl --in top.sv --top TOP --incdir ./include --incdir ./commo
 
 1. **`<outfile>`**（默认 `extracted.sv`）：合并后的 SystemVerilog 文件，仅包含顶层模块及其依赖的所有子模块
 2. **`<hierfile>`**（默认 `hierarchy.txt`）：层级关系树形文本
-3. **`<outdir>/include/`**：被抽取模块用到的 `include 文件副本
+3. **`missing_modules.txt`**（如果存在外部依赖）：不在输入文件中的缺失模块列表
+4. **`<outdir>/include/`**：被抽取模块用到的 `include` 文件副本
+
+### missing_modules.txt 说明
+
+该文件包含所有在代码中被实例化但未在输入文件中定义的模块，通常来自外部库。示例：
+
+```
+dsp_lib
+memory_ctrl
+pll_core
+```
+
+这有助于用户快速识别设计的外部依赖。
 
 ## 层级文件格式
 
